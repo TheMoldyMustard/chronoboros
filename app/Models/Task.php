@@ -6,17 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class Task extends Model
 {
-    // Specify the table name (if different from 'tasks')
     protected $table = 'tasks';
-    
-    // Specify the primary key column name
     protected $primaryKey = 'task_id';
-    
-    // Tell Laravel NOT to manage created_at/updated_at timestamps
-    // (since your table uses 'create_date' instead)
     public $timestamps = false;
     
-    // Allow mass assignment for these fields
     protected $fillable = [
         'task_title',
         'task_description',
@@ -24,13 +17,25 @@ class Task extends Model
         'deadline_time',
         'create_date',
         'priority',
-        'color'
+        'color',
+        'subject_id'
     ];
     
-    // Cast attributes to specific types
     protected $casts = [
         'deadline_date' => 'date',
         'create_date' => 'datetime',
         'priority' => 'integer',
     ];
+
+    // Relationship with Subject
+    public function subject()
+    {
+        return $this->belongsTo(Subject::class, 'subject_id', 'subject_id');
+    }
+
+    // Relationship with FileAssoc
+    public function files()
+    {
+        return $this->hasMany(FileAssoc::class, 'task_id', 'task_id');
+    }
 }
