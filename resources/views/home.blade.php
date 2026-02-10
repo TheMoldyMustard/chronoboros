@@ -20,6 +20,26 @@
 <body class="bg-gray-100 min-h-screen">
     <!-- Include Sidebar -->
     @include('components.sidebar')
+    <div id="toast-container"
+        class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 items-end">
+        
+        @if(session('success'))
+            <div class="toast bg-green-600 text-white px-6 py-4 rounded-xl shadow-xl
+                        transition-transform duration-300 translate-y-8">
+                <div class="flex items-center gap-3">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    <span class="font-medium">
+                        {{ session('success') }}
+                    </span>
+                </div>
+            </div>
+        @endif
+
+    </div>
+
 
     <!-- Main Content Area (with left margin for sidebar) -->
     <div class="ml-64 py-8 px-4">
@@ -47,14 +67,7 @@
                     </button>
                 </div>
             </div>
-
-            <!-- Success Message -->
-            @if(session('success'))
-                <div class="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg relative" role="alert">
-                    <span class="block sm:inline">{{ session('success') }}</span>
-                </div>
-            @endif
-            
+          
             <!-- Tasks List -->
             <div class="space-y-3">
                 @forelse($tasks as $task)
@@ -226,42 +239,167 @@
 
     <!-- Include Modal -->
     @include('components.add-task-modal', ['subjects' => $subjects])
+    @include('components.edit-task-modal', ['subjects' => $subjects])
 
     <script>
-        function toggleTask(taskId) {
-            const taskElement = document.getElementById('task-' + taskId);
-            const iconElement = document.getElementById('icon-' + taskId);
+    function toggleTask(taskId) {
+        const taskElement = document.getElementById('task-' + taskId);
+        const iconElement = document.getElementById('icon-' + taskId);
+        
+        if (taskElement.classList.contains('task-collapsed')) {
+            taskElement.classList.remove('task-collapsed');
+            taskElement.classList.add('task-expanded');
+            iconElement.style.transform = 'rotate(180deg)';
+        } else {
+            taskElement.classList.add('task-collapsed');
+            taskElement.classList.remove('task-expanded');
+            iconElement.style.transform = 'rotate(0deg)';
+        }
+    }
+
+    function editTask(taskId) {
+        openEditModal(taskId);
+    }
+
+    async function openEditModal(taskId) {
+    try {
+        const response = await fetch(`/tasks/${taskId}/edit`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const task = data.task;
+        
+        // Populate form fields
+        document.getElementById('edit_task_title').value = task.task_title || '';
+        document.getElementById('edit_task_description').value = task.task_description || '';
+        document.getElementById('edit_deadline_date').value = task.deadline_date || '';
+        document.getElementById('edit_deadline_time').value = task.deadline_time ? task.deadline_time.substring(0, 5) : '';
+        document.getElementById('edit_priority').value = task.priority || '';
+        document.getElementById('edit_color').value = task.color || '#3B82F6';
+        document.getElementById('edit_subject_id').value = task.subject_id || '';
+        
+        // Check if time is 23:59 to determine checkbox state
+        const isDueToday = task.deadline_time === '23:59:00';
+        document.getElementById('edit_due_today').checked = isDueToday;
+        toggleEditDueToday();
+        
+        // Update form action - IMPORTANT: This needs to be the full URL
+        const form = document.getElementById('editTaskForm');
+        form.action = `/tasks/${taskId}`;
+        
+        // Add the PUT method field if it doesn't exist
+        let methodField = form.querySelector('input[name="_method"]');
+        if (!methodField) {
+            methodField = document.createElement('input');
+            methodField.type = 'hidden';
+            methodField.name = '_method';
+            methodField.value = 'PUT';
+            form.appendChild(methodField);
+        } else {
+            methodField.value = 'PUT';
+        }
+        
+        // Show modal
+        document.getElementById('editTaskModal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    } catch (error) {
+        console.error('Error loading task:', error);
+        alert('Failed to load task data. Error: ' + error.message);
+    }
+}
+
+    function deleteTask(taskId) {
+        if (confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
+            // Create form and submit
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/tasks/${taskId}`;
             
-            if (taskElement.classList.contains('task-collapsed')) {
-                taskElement.classList.remove('task-collapsed');
-                taskElement.classList.add('task-expanded');
-                iconElement.style.transform = 'rotate(180deg)';
-            } else {
-                taskElement.classList.add('task-collapsed');
-                taskElement.classList.remove('task-expanded');
-                iconElement.style.transform = 'rotate(0deg)';
-            }
+            const csrfToken = document.createElement('input');
+            csrfToken.type = 'hidden';
+            csrfToken.name = '_token';
+            csrfToken.value = '{{ csrf_token() }}';
+            
+            const methodField = document.createElement('input');
+            methodField.type = 'hidden';
+            methodField.name = '_method';
+            methodField.value = 'DELETE';
+            
+            form.appendChild(csrfToken);
+            form.appendChild(methodField);
+            document.body.appendChild(form);
+            form.submit();
         }
+    }
 
-        function editTask(taskId) {
-            // TODO: Implement edit functionality
-            console.log('Edit task:', taskId);
-            alert('Edit functionality coming soon!');
-        }
+    function archiveTask(taskId) {
+        // TODO: Implement archive functionality
+        console.log('Archive task:', taskId);
+        alert('Archive functionality coming soon!');
+    }
+//     // Handle edit form submission with JavaScript
+// document.addEventListener('DOMContentLoaded', function() {
+//     const editForm = document.getElementById('editTaskForm');
+    
+//     if (editForm) {
+//         editForm.addEventListener('submit', function(e) {
+//             e.preventDefault();
+            
+//             const formData = new FormData(this);
+//             const actionUrl = this.action;
+            
+//             // Force the _method to PUT
+//             formData.set('_method', 'PUT');
+            
+//             fetch(actionUrl, {
+//                 method: 'POST',
+//                 body: formData,
+//                 headers: {
+//                     'X-Requested-With': 'XMLHttpRequest'
+//                 }
+//             })
+//             .then(response => {
+//                 if (response.ok) {
+//                     window.location.reload();
+//                 } else {
+//                     return response.text().then(text => {
+//                         throw new Error('Update failed: ' + text);
+//                     });
+//                 }
+//             })
+//             .catch(error => {
+//                 console.error('Error:', error);
+//                 alert('Failed to update task: ' + error.message);
+//             });
+//         });
+//     }
+// });
 
-        function deleteTask(taskId) {
-            // TODO: Implement delete functionality
-            if (confirm('Are you sure you want to delete this task?')) {
-                console.log('Delete task:', taskId);
-                alert('Delete functionality coming soon!');
-            }
-        }
+    document.addEventListener('DOMContentLoaded', () => {
+        const toasts = document.querySelectorAll('#toast-container .toast');
 
-        function archiveTask(taskId) {
-            // TODO: Implement archive functionality
-            console.log('Archive task:', taskId);
-            alert('Archive functionality coming soon!');
-        }
-    </script>
+        toasts.forEach((toast, index) => {
+
+            // Slight delay so CSS transition triggers
+            setTimeout(() => {
+                toast.classList.remove('translate-y-8'); // move UP into view
+                toast.classList.add('translate-y-0');
+            }, 100 + (index * 80)); // small stagger if multiple exist
+
+            // Auto hide
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0');
+                toast.classList.add('translate-y-24'); // slide DOWN out
+
+                setTimeout(() => toast.remove(), 300);
+            }, 2000 + (index * 200));
+        });
+    });
+
+
+</script>
 </body>
 </html>

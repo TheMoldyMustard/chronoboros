@@ -280,13 +280,23 @@
         const timeInput = document.getElementById('deadline_time');
         
         if (checkbox.checked) {
-            // Auto-set time to 11:59 PM and disable time input
             timeInput.value = '23:59';
             timeInput.disabled = true;
         } else {
-            // Enable manual time input and clear value
             timeInput.disabled = false;
             timeInput.value = '';
+        }
+    }
+
+    function toggleEditDueToday() {
+        const checkbox = document.getElementById('edit_due_today');
+        const timeInput = document.getElementById('edit_deadline_time');
+        
+        if (checkbox.checked) {
+            timeInput.value = '23:59';
+            timeInput.disabled = true;
+        } else {
+            timeInput.disabled = false;
         }
     }
 
@@ -294,8 +304,6 @@
         const modal = document.getElementById('addTaskModal');
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
-        
-        // Set initial state
         toggleDueToday();
     }
 
@@ -304,10 +312,16 @@
         modal.classList.add('hidden');
         document.body.style.overflow = 'auto';
         document.querySelector('#addTaskModal form').reset();
-        
-        // Re-check the checkbox and reset time
         document.getElementById('due_today').checked = true;
         toggleDueToday();
+    }
+
+    
+
+    function closeEditModal() {
+        document.getElementById('editTaskModal').classList.add('hidden');
+        document.body.style.overflow = 'auto';
+        document.getElementById('editTaskForm').reset();
     }
 
     function openAddSubjectModal() {
@@ -326,6 +340,12 @@
         }
     });
 
+    document.getElementById('editTaskModal')?.addEventListener('click', function(e) {
+        if (e.target === this || e.target === this.firstElementChild) {
+            closeEditModal();
+        }
+    });
+
     document.getElementById('addSubjectModal')?.addEventListener('click', function(e) {
         if (e.target === this || e.target === this.firstElementChild) {
             closeAddSubjectModal();
@@ -336,6 +356,7 @@
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             closeModal();
+            closeEditModal();
             closeAddSubjectModal();
         }
     });

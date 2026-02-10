@@ -99,7 +99,7 @@ class TaskController extends Controller
     {
         $validated = $request->validate([
             'task_title' => 'required|max:45',
-            'task_description' => 'nullable', // Changed from 'required' to 'nullable'
+            'task_description' => 'nullable',
             'deadline_date' => 'nullable|date',
             'deadline_time' => 'nullable',
             'due_today' => 'nullable|boolean',
@@ -141,6 +141,89 @@ class TaskController extends Controller
         }
 
         return redirect()->back()->with('success', 'Task added successfully!');
+    }
+
+    public function edit($id)
+    {
+        try {
+            $task = Task::with(['files', 'subject'])->findOrFail($id);
+            $subjects = Subject::all();
+            
+            return response()->json([
+                'task' => $task,
+                'subjects' => $subjects
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function update(Request $request, $id)
+    {
+        $task = Task::findOrFail($id);
+
+        $validated = $request->validate([
+            'task_title' => 'required|max:45',
+            'task_description' => 'nullable',
+            'deadline_date' => 'nullable|date',
+            'deadline_time' => 'nullable',
+            'due_today' => 'nullable|boolean',
+            'priority' => 'nullable|integer',
+            'color' => 'nullable|size:7',
+            'subject_id' => 'nullable|exists:subjects,subject_id',
+            'file' => 'nullable|file|max:10240',
+            'file_desc' => 'nullable|string',
+        ]);
+
+        // Handle "Due within the day" checkbox
+        if ($request->has('due_today') && $request->due_today) {
+            if ($request->deadline_date) {
+                $validated['deadline_time'] = '23:59:00';
+            } else {
+                $validated['deadline_time'] = null;
+            }
+        }
+
+        // Remove due_today from validated data
+        unset($validated['due_today']);
+
+        $task->update($validated);
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $fileName = time() . '_' . $file->getClientOriginalName();
+            $file->move(public_path('uploads'), $fileName);
+
+            FileAssoc::create([
+                'file_name' => $fileName,
+                'task_id' => $task->task_id,
+                'file_desc' => $request->file_desc
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Task updated successfully!');
+    }
+
+    public function destroy($id)
+    {
+        $task = Task::findOrFail($id);
+
+        // Save title before deletion
+        $title = $task->task_title;
+
+        foreach ($task->files as $file) {
+            $filePath = public_path('uploads/' . $file->file_name);
+            if (file_exists($filePath)) {
+                unlink($filePath);
+            }
+            $file->delete();
+        }
+
+        $task->delete();
+
+        return redirect()->back()->with('success', "Task \"{$title}\" deleted successfully!");
     }
 
     public function storeSubject(Request $request)
