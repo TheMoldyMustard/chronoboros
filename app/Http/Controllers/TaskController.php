@@ -6,25 +6,103 @@ use App\Models\Task;
 use App\Models\FileAssoc;
 use App\Models\Subject;
 use Illuminate\Http\Request;
+use Carbon\Carbon;
 
 class TaskController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $tasks = Task::with(['files', 'subject'])
-            ->orderByRaw('priority IS NULL, priority DESC')
-            ->get();
+        // Get sorting parameters from request (for future sorting feature)
+        $sortBy = $request->get('sort_by', 'deadline'); // default: deadline
+        $sortOrder = $request->get('sort_order', 'asc'); // default: ascending
+
+        $query = Task::with(['files', 'subject']);
+
+        // Apply sorting based on parameters
+        switch ($sortBy) {
+            case 'deadline':
+                // Sort by deadline (nulls last), then by priority (desc)
+                $query->orderByRaw('
+                    CASE 
+                        WHEN deadline_date IS NULL THEN 1 
+                        ELSE 0 
+                    END, 
+                    deadline_date ASC, 
+                    deadline_time ASC,
+                    CASE 
+                        WHEN priority IS NULL THEN 0 
+                        ELSE priority 
+                    END DESC
+                ');
+                break;
+            
+            case 'priority':
+                // Sort by priority (nulls/0 last), then by deadline
+                $query->orderByRaw('
+                    CASE 
+                        WHEN priority IS NULL OR priority = 0 THEN 0 
+                        ELSE priority 
+                    END DESC,
+                    CASE 
+                        WHEN deadline_date IS NULL THEN 1 
+                        ELSE 0 
+                    END, 
+                    deadline_date ASC
+                ');
+                break;
+            
+            case 'subject':
+                // Sort by subject name, then by deadline
+                $query->leftJoin('subjects', 'tasks.subject_id', '=', 'subjects.subject_id')
+                    ->select('tasks.*')
+                    ->orderByRaw('
+                        CASE 
+                            WHEN subjects.subject_name IS NULL THEN "ZZZZ" 
+                            ELSE subjects.subject_name 
+                        END ASC,
+                        CASE 
+                            WHEN deadline_date IS NULL THEN 1 
+                            ELSE 0 
+                        END, 
+                        deadline_date ASC
+                    ');
+                break;
+            
+            case 'created':
+                // Sort by creation date
+                $query->orderBy('create_date', $sortOrder);
+                break;
+            
+            default:
+                // Default: deadline sorting
+                $query->orderByRaw('
+                    CASE 
+                        WHEN deadline_date IS NULL THEN 1 
+                        ELSE 0 
+                    END, 
+                    deadline_date ASC, 
+                    deadline_time ASC,
+                    CASE 
+                        WHEN priority IS NULL THEN 0 
+                        ELSE priority 
+                    END DESC
+                ');
+        }
+
+        $tasks = $query->get();
         $subjects = Subject::all();
-        return view('home', compact('tasks', 'subjects'));
+        
+        return view('home', compact('tasks', 'subjects', 'sortBy', 'sortOrder'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
             'task_title' => 'required|max:45',
-            'task_description' => 'required',
+            'task_description' => 'nullable', // Changed from 'required' to 'nullable'
             'deadline_date' => 'nullable|date',
             'deadline_time' => 'nullable',
+            'due_today' => 'nullable|boolean',
             'priority' => 'nullable|integer',
             'color' => 'nullable|size:7',
             'subject_id' => 'nullable|exists:subjects,subject_id',
@@ -32,7 +110,21 @@ class TaskController extends Controller
             'file_desc' => 'nullable|string',
         ]);
 
+        // Handle "Due within the day" checkbox
+        if ($request->has('due_today') && $request->due_today) {
+            // Only set time to 23:59 if a date is actually provided
+            if ($request->deadline_date) {
+                $validated['deadline_time'] = '23:59:00';
+            } else {
+                // If checkbox is checked but no date, don't set time either
+                $validated['deadline_time'] = null;
+            }
+        }
+
         $validated['create_date'] = now();
+
+        // Remove due_today from validated data (not a database column)
+        unset($validated['due_today']);
 
         $task = Task::create($validated);
 

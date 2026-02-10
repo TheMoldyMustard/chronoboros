@@ -47,6 +47,24 @@
                         </select>
                     </div>
 
+                    <!-- Due Within This Day Checkbox -->
+                    <div class="md:col-span-2">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                id="due_today" 
+                                name="due_today" 
+                                value="1"
+                                checked
+                                onchange="toggleDueToday()"
+                                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            >
+                            <span class="text-sm font-medium text-gray-700">
+                                Due within the day (sets time to 11:59 PM)
+                            </span>
+                        </label>
+                    </div>
+
                     <!-- Task Title -->
                     <div class="md:col-span-2">
                         <label for="task_title" class="block text-sm font-medium text-gray-700 mb-2">
@@ -66,15 +84,14 @@
                     <!-- Task Description -->
                     <div class="md:col-span-2">
                         <label for="task_description" class="block text-sm font-medium text-gray-700 mb-2">
-                            Description <span class="text-red-500">*</span>
+                            Description
                         </label>
                         <textarea 
                             id="task_description" 
                             name="task_description" 
                             rows="3"
-                            required
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none"
-                            placeholder="Enter task description"
+                            placeholder="Enter task description (optional)"
                         ></textarea>
                     </div>
 
@@ -100,10 +117,11 @@
                             type="time" 
                             id="deadline_time" 
                             name="deadline_time"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                            value="23:59"
+                            disabled
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
                         >
                     </div>
-
                     <!-- Priority -->
                     <div>
                         <label for="priority" class="block text-sm font-medium text-gray-700 mb-2">
@@ -182,7 +200,7 @@
     </div>
 </div>
 
-<!-- Add Subject Modal -->
+<!-- Add Subject Modal (keep as is) -->
 <div id="addSubjectModal" class="fixed inset-0 z-[60] overflow-y-auto hidden">
     <!-- Backdrop with blur -->
     <div class="fixed inset-0 bg-black/60" style="backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);"></div>
@@ -257,10 +275,28 @@
 </div>
 
 <script>
+    function toggleDueToday() {
+        const checkbox = document.getElementById('due_today');
+        const timeInput = document.getElementById('deadline_time');
+        
+        if (checkbox.checked) {
+            // Auto-set time to 11:59 PM and disable time input
+            timeInput.value = '23:59';
+            timeInput.disabled = true;
+        } else {
+            // Enable manual time input and clear value
+            timeInput.disabled = false;
+            timeInput.value = '';
+        }
+    }
+
     function openModal() {
         const modal = document.getElementById('addTaskModal');
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
+        
+        // Set initial state
+        toggleDueToday();
     }
 
     function closeModal() {
@@ -268,6 +304,10 @@
         modal.classList.add('hidden');
         document.body.style.overflow = 'auto';
         document.querySelector('#addTaskModal form').reset();
+        
+        // Re-check the checkbox and reset time
+        document.getElementById('due_today').checked = true;
+        toggleDueToday();
     }
 
     function openAddSubjectModal() {
