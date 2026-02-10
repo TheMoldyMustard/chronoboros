@@ -12,16 +12,14 @@ class TaskController extends Controller
 {
     public function index(Request $request)
     {
-        // Get sorting parameters from request (for future sorting feature)
-        $sortBy = $request->get('sort_by', 'deadline'); // default: deadline
-        $sortOrder = $request->get('sort_order', 'asc'); // default: ascending
+        $sortBy = $request->get('sort_by', 'deadline');
+        $sortOrder = $request->get('sort_order', 'asc');
 
-        $query = Task::with(['files', 'subject']);
+        // Only get active (non-archived) tasks
+        $query = Task::with(['files', 'subject'])->active();
 
-        // Apply sorting based on parameters
         switch ($sortBy) {
             case 'deadline':
-                // Sort by deadline (nulls last), then by priority (desc)
                 $query->orderByRaw('
                     CASE 
                         WHEN deadline_date IS NULL THEN 1 
@@ -37,7 +35,6 @@ class TaskController extends Controller
                 break;
             
             case 'priority':
-                // Sort by priority (nulls/0 last), then by deadline
                 $query->orderByRaw('
                     CASE 
                         WHEN priority IS NULL OR priority = 0 THEN 0 
@@ -52,7 +49,6 @@ class TaskController extends Controller
                 break;
             
             case 'subject':
-                // Sort by subject name, then by deadline
                 $query->leftJoin('subjects', 'tasks.subject_id', '=', 'subjects.subject_id')
                     ->select('tasks.*')
                     ->orderByRaw('
@@ -69,12 +65,10 @@ class TaskController extends Controller
                 break;
             
             case 'created':
-                // Sort by creation date
                 $query->orderBy('create_date', $sortOrder);
                 break;
             
             default:
-                // Default: deadline sorting
                 $query->orderByRaw('
                     CASE 
                         WHEN deadline_date IS NULL THEN 1 
@@ -95,6 +89,25 @@ class TaskController extends Controller
         return view('home', compact('tasks', 'subjects', 'sortBy', 'sortOrder'));
     }
 
+    public function archived(Request $request)
+    {
+        $sortBy = $request->get('sort_by', 'archived');
+        
+        // Get only archived tasks
+        $query = Task::with(['files', 'subject'])->archived();
+
+        if ($sortBy === 'archived') {
+            $query->orderBy('archived_on', 'desc');
+        } else {
+            $query->orderBy('create_date', 'desc');
+        }
+
+        $tasks = $query->get();
+        $subjects = Subject::all();
+        
+        return view('archived', compact('tasks', 'subjects', 'sortBy'));
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -110,20 +123,17 @@ class TaskController extends Controller
             'file_desc' => 'nullable|string',
         ]);
 
-        // Handle "Due within the day" checkbox
         if ($request->has('due_today') && $request->due_today) {
-            // Only set time to 23:59 if a date is actually provided
             if ($request->deadline_date) {
                 $validated['deadline_time'] = '23:59:00';
             } else {
-                // If checkbox is checked but no date, don't set time either
                 $validated['deadline_time'] = null;
             }
         }
 
         $validated['create_date'] = now();
+        $validated['is_archived'] = 0;
 
-        // Remove due_today from validated data (not a database column)
         unset($validated['due_today']);
 
         $task = Task::create($validated);
@@ -177,7 +187,6 @@ class TaskController extends Controller
             'file_desc' => 'nullable|string',
         ]);
 
-        // Handle "Due within the day" checkbox
         if ($request->has('due_today') && $request->due_today) {
             if ($request->deadline_date) {
                 $validated['deadline_time'] = '23:59:00';
@@ -186,7 +195,6 @@ class TaskController extends Controller
             }
         }
 
-        // Remove due_today from validated data
         unset($validated['due_today']);
 
         $task->update($validated);
@@ -206,13 +214,34 @@ class TaskController extends Controller
         return redirect()->back()->with('success', 'Task updated successfully!');
     }
 
+    public function archive($id)
+    {
+        $task = Task::findOrFail($id);
+        
+        $task->update([
+            'is_archived' => 1,
+            'archived_on' => now()
+        ]);
+
+        return redirect()->back()->with('success', 'Task archived successfully!');
+    }
+
+    public function unarchive($id)
+    {
+        $task = Task::findOrFail($id);
+        
+        $task->update([
+            'is_archived' => 0,
+            'archived_on' => null
+        ]);
+
+        return redirect()->back()->with('success', 'Task restored successfully!');
+    }
+
     public function destroy($id)
     {
         $task = Task::findOrFail($id);
-
-        // Save title before deletion
-        $title = $task->task_title;
-
+        
         foreach ($task->files as $file) {
             $filePath = public_path('uploads/' . $file->file_name);
             if (file_exists($filePath)) {
@@ -220,10 +249,10 @@ class TaskController extends Controller
             }
             $file->delete();
         }
-
+        
         $task->delete();
 
-        return redirect()->back()->with('success', "Task \"{$title}\" deleted successfully!");
+        return redirect()->back()->with('success', 'Task deleted successfully!');
     }
 
     public function storeSubject(Request $request)
